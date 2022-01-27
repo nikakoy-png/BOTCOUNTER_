@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+
 from settings import *
 
 
@@ -18,6 +21,14 @@ class OutputFormCity(StatesGroup):
 
 
 class OutputFormDescription(StatesGroup):
+    Output = State()
+
+
+class OutputFormGetUser(StatesGroup):
+    Output = State()
+
+
+class OutputFormMessage(StatesGroup):
     Output = State()
 
 
@@ -73,6 +84,22 @@ async def register_point(message):
         await bot.send_message(message.from_user.id, "Вы уже являетесь пользователем нашего бота!", reply_markup=menu)
 
 
+@dp.message_handler(commands=['send_message'])
+async def send_message(message):
+    user = db.get_user(message.from_user.id)
+    if user['status'] == 'Admin':
+        await bot.send_message(message.from_user.id, 'Отправьте сообщение')
+        await OutputFormMessage.Output.set()
+
+
+@dp.message_handler(commands=['get_user'])
+async def get_user(message):
+    user = db.get_user(message.from_user.id)
+    if user['status'] == 'Admin':
+        await bot.send_message(message.from_user.id, 'Отправьте айди пользователя')
+        await OutputFormGetUser.Output.set()
+
+
 @dp.message_handler(content_types=['text'])
 async def get_text_massage(message: types.Message):
     if message.text == 'Я парень':
@@ -81,6 +108,59 @@ async def get_text_massage(message: types.Message):
     elif message.text == 'Я девушка':
         db.set_value(message.from_user.id, 'sex', 'Девушка')
         await bot.send_message(message.from_user.id, "Кто тебе интересен?", reply_markup=sex_)
+    elif message.text == '👎':
+        db.off_active_seek(message.from_user.id)
+        found_user = db.get_user(db.get_pair(message.from_user.id))
+        if not found_user:
+            await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
+        else:
+            try:
+                await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
+                                     caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                             f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
+                                             f"\nО себе: {found_user['description']}")
+                db.increment_row(found_user['id'], 'views')
+            except Exception:
+                found_user = db.get_user(db.get_pair(message.from_user.id))
+                if not found_user:
+                    await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
+                else:
+                    try:
+                        await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
+                                             caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                                     f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
+                                                     f"\nО себе: {found_user['description']}")
+                        db.increment_row(found_user['id'], 'views')
+                    except Exception:
+                        found_user = db.get_user(db.get_pair(message.from_user.id))
+                        if not found_user:
+                            await bot.send_message(message.from_user.id,
+                                                   "К сожалению, анкеты закончились, приходите позже!")
+                        else:
+                            await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
+                                                 caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                                         f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
+                                                         f"\nО себе: {found_user['description']}")
+                            db.increment_row(found_user['id'], 'views')
+    elif message.text == 'Анкета❤️':
+        user = db.get_user(message.from_user.id)
+        if user['status'] == 'User' or user['status'] == 'Admin':
+            await bot.send_photo(message.from_user.id, open(user['photo'], 'rb'),
+                                 caption=f"Ваша анкета:\n\nИмя: {user['name']}\nПол: {user['sex']}"
+                                         f"\nИнтересуют: {user['interesting']}\n"
+                                         f"Возраст: {user['age']}\n"
+                                         f"\nО себе: {user['description']}")
+    elif message.text == 'стоп':
+        user = db.get_user(message.from_user.id)
+        if user['status'] == 'User' or user['status'] == 'Admin':
+            await bot.send_message(message.from_user.id, 'Удачи ❤️', reply_markup=menu)
+    elif message.text == 'Статистика📈':
+        user = db.get_user(message.from_user.id)
+        if user['status'] == 'User' or user['status'] == 'Admin':
+            await bot.send_message(message.from_user.id, f"СТАТИСТИКА📈\n\n\n"
+                                                         f"Лайков на твоей анкете: {user['like']}\n"
+                                                         f"Просмотров твоей анкеты: {user['views']}\n"
+                                                         f"Взаимных лайков: {user['mutual']}\n", reply_markup=menu)
     elif message.text == 'Девушки':
         db.set_value(message.from_user.id, 'interesting', 'Девушки')
         await bot.send_message(message.from_user.id, "Введите свой возраст")
@@ -91,7 +171,7 @@ async def get_text_massage(message: types.Message):
         await OutputFormAge.Output.set()
     elif message.text == 'Начать подбор💜':
         user = db.get_user(message.from_user.id)
-        if user['status'] == 'User':
+        if user['status'] == 'User' or user['status'] == 'Admin':
             await bot.send_message(message.from_user.id, "Отлично!\n\n"
                                                          "Нажми '👎', если тебе кто то понравился\n"
                                                          "Нажми '❤️', чтоб продолжить поиск\n",
@@ -100,20 +180,34 @@ async def get_text_massage(message: types.Message):
             if not found_user:
                 await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
             else:
-                await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                     caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                             f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}")
-                db.increment_row(found_user['id'], 'views')
+                try:
+                    await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
+                                         caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                                 f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}")
+                    db.increment_row(found_user['id'], 'views')
+                except Exception:
+                    found_user = db.get_user(db.get_pair(message.from_user.id))
+                    if not found_user:
+                        await bot.send_message(message.from_user.id,
+                                               "К сожалению, анкеты закончились, приходите позже!")
+                    else:
+                        await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
+                                             caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                                     f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
+                                                     f"\nО себе: {found_user['description']}")
+                        db.increment_row(found_user['id'], 'views')
     elif message.text == '❤️':
         user = db.get_user(message.from_user.id)
-        if user['status'] == 'User':
-                id_found_user = db.get_active_seek(message.from_user.id)
+        if user['status'] == 'User' or user['status'] == 'Admin':
+            id_found_user = db.get_active_seek(message.from_user.id)
             await bot.send_message(message.from_user.id, 'Отлично!\nЖдем ответа найденного пользователя!❤️')
             await bot.send_photo(id_found_user, open(user['photo'], 'rb'),
                                  caption=f"Имя: {user['name']}\nПол: {user['sex']}"
                                          f"\nВозраст: {user['age']}\nГород: {user['city']}"
                                          f"\nО себе: {user['description']}",
                                  reply_markup=create_fidback_ford(message.from_user.id))
+            print(f"{message.from_user.id} лайкнула {id_found_user}")
+            await bot.send_message(int(db.get_id_admin()), f"{message.from_user.id} лайкнула {id_found_user}")
             db.increment_row(id_found_user, 'views')
             db.increment_row(id_found_user, 'like')
             db.like_active_seek(message.from_user.id)
@@ -121,41 +215,22 @@ async def get_text_massage(message: types.Message):
         if not found_user:
             await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
         else:
-            await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                 caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                         f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                         f"\nО себе: {found_user['description']}")
-            db.increment_row(found_user['id'], 'views')
-    elif message.text == '👎':
-        db.off_active_seek(message.from_user.id)
-        found_user = db.get_user(db.get_pair(message.from_user.id))
-        if not found_user:
-            await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
-        else:
-            await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                 caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                         f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                         f"\nО себе: {found_user['description']}")
-            db.increment_row(found_user['id'], 'views')
-    elif message.text == 'Анкета❤️':
-        user = db.get_user(message.from_user.id)
-        if user['status'] == 'User':
-            await bot.send_photo(message.from_user.id, open(user['photo'], 'rb'),
-                                 caption=f"Ваша анкета:\n\nИмя: {user['name']}\nПол: {user['sex']}"
-                                         f"\nИнтересуют: {user['interesting']}\n"
-                                         f"Возраст: {user['age']}\n"
-                                         f"\nО себе: {user['description']}")
-    elif message.text == 'стоп':
-        user = db.get_user(message.from_user.id)
-        if user['status'] == 'User':
-            await bot.send_message(message.from_user.id, 'Удачи ❤️', reply_markup=menu)
-    elif message.text == 'Статистика📈':
-        user = db.get_user(message.from_user.id)
-        if user['status'] == 'User':
-            await bot.send_message(message.from_user.id, f"СТАТИСТИКА📈\n\n\n"
-                                                         f"Лайков на твоей анкете: {user['like']}\n"
-                                                         f"Просмотров твоей анкеты: {user['views']}\n"
-                                                         f"Взаимных лайков: {user['mutual']}\n", reply_markup=menu)
+            try:
+                await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
+                                     caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                             f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
+                                             f"\nО себе: {found_user['description']}")
+                db.increment_row(found_user['id'], 'views')
+            except Exception:
+                found_user = db.get_user(db.get_pair(message.from_user.id))
+                if not found_user:
+                    await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
+                else:
+                    await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
+                                         caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                                 f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
+                                                 f"\nО себе: {found_user['description']}")
+                    db.increment_row(found_user['id'], 'views')
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('btn'))
@@ -172,6 +247,9 @@ async def fidback(callback_query: types.CallbackQuery):
     db.ok_active_seek(simple_user['id'], found_user['id'])
     db.increment_row(int(callback_query.data.replace('btn_', '')), 'mutual')
     db.increment_row(callback_query.from_user.id, 'mutual')
+    print(f"{callback_query.from_user.id} взаимно лайкнула {int(callback_query.data.replace('btn_', ''))}")
+    await bot.send_message(int(db.get_id_admin()), f"{callback_query.from_user.id} взаимно лайкнула"
+                                              f" {int(callback_query.data.replace('btn_', ''))}")
 
 
 @dp.message_handler(state='*', commands='cancel')
@@ -216,6 +294,37 @@ async def process_name(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(state='*', commands='cancel')
+@dp.message_handler(state=OutputFormGetUser.Output)
+async def process_name(message: types.Message, state: FSMContext):
+    Output = message.text
+    user = db.get_user(int(Output))
+    await bot.send_photo(message.from_user.id, open(user['photo'], 'rb'),
+                         caption=f"'id': {user['id']}\n"
+                                 f"'login': {user['login']}\n"
+                                 f"'description': {user['description']}\n"
+                                 f"'views': {user['views']}\n"
+                                 f"'city': {user['city']}\n"
+                                 f"'photo': {user['photo']}\n"
+                                 f"'mutual': {user['mutual']}\n"
+                                 f"'sex': {user['sex']}\n"
+                                 f"'age': {user['age']}\n"
+                                 f"'interesting': {user['interesting']}\n"
+                                 f"'name': {user['name']}\n"
+                                 f"'id': {user['status']}\n"
+                         )
+    await state.finish()
+
+
+@dp.message_handler(state='*', commands='cancel')
+@dp.message_handler(state=OutputFormMessage.Output)
+async def process_name(message: types.Message, state: FSMContext):
+    Output = message.text
+    for x in db.get_all_user():
+        await bot.send_message(x, str(Output))
+    await state.finish()
+
+
+@dp.message_handler(state='*', commands='cancel')
 @dp.message_handler(state=OutputFormImage.Output, content_types=['photo'])
 async def process_img(message, state: FSMContext):
     try:
@@ -231,6 +340,7 @@ async def process_img(message, state: FSMContext):
                                                      "Вы можете проверить свою анкету нажав на кнопку 'Анкета' ",
                                reply_markup=menu)
         await state.finish()
+        await bot.send_message(int(db.get_id_admin()), f'successfull register {message.from_user.id}')
     except Exception as e:
         await bot.send_message(message.from_user.id, e)
         await state.finish()
