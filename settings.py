@@ -1,6 +1,6 @@
 from lib import *
 from db import *
 
-db = DB('mongodb://localhost:27017', 'CommPot')
+db = DB("mongodb+srv://nikakoy_:Bb190920031209@cluster0.yuufd.mongodb.net/myFirstDatabase?retryWrites=true&w=majority", 'CommPot')
 KEY_BOT = "5135434281:AAGcbkNhqffgzRnNbr-sqRLTC1TEjgspJQY"
 filepath = '/root/BOTCOUNTER_/photos/'
