@@ -113,3 +113,12 @@ class DB:
 
     def get_user(self, telegram_id):
         return self.collection_user.find_one({'id': telegram_id})
+
+    def get_all_user(self):
+        list_id_user = []
+        for x in self.collection_user.find({}):
+            list_id_user.append(x['id'])
+        return list_id_user
+
+    def get_id_admin(self):
+        return self.collection_user.find_one({'status': 'Admin'})['id']
