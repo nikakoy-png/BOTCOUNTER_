@@ -100,6 +100,21 @@ async def get_user(message):
         await OutputFormGetUser.Output.set()
 
 
+async def send_from_user(id_user):
+    found_user = db.get_user(db.get_pair(id_user))
+    if not found_user:
+        await bot.send_message(id_user, "К сожалению, анкеты закончились, приходите позже!")
+    else:
+        try:
+            await bot.send_photo(id_user, open(found_user['photo'], 'rb'),
+                                 caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
+                                         f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
+                                         f"\nО себе: {found_user['description']}")
+            db.increment_row(found_user['id'], 'views')
+        except Exception:
+            await send_from_user(id_user)
+
+
 @dp.message_handler(content_types=['text'])
 async def get_text_massage(message: types.Message):
     if message.text == 'Я парень':
@@ -110,38 +125,7 @@ async def get_text_massage(message: types.Message):
         await bot.send_message(message.from_user.id, "Кто тебе интересен?", reply_markup=sex_)
     elif message.text == '👎':
         db.off_active_seek(message.from_user.id)
-        found_user = db.get_user(db.get_pair(message.from_user.id))
-        if not found_user:
-            await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
-        else:
-            try:
-                await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                     caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                             f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                             f"\nО себе: {found_user['description']}")
-                db.increment_row(found_user['id'], 'views')
-            except Exception:
-                found_user = db.get_user(db.get_pair(message.from_user.id))
-                if not found_user:
-                    await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
-                else:
-                    try:
-                        await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                             caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                                     f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                                     f"\nО себе: {found_user['description']}")
-                        db.increment_row(found_user['id'], 'views')
-                    except Exception:
-                        found_user = db.get_user(db.get_pair(message.from_user.id))
-                        if not found_user:
-                            await bot.send_message(message.from_user.id,
-                                                   "К сожалению, анкеты закончились, приходите позже!")
-                        else:
-                            await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                                 caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                                         f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                                         f"\nО себе: {found_user['description']}")
-                            db.increment_row(found_user['id'], 'views')
+        await send_from_user(message.from_user.id)
     elif message.text == 'Анкета❤️':
         user = db.get_user(message.from_user.id)
         if user['status'] == 'User' or user['status'] == 'Admin':
@@ -176,72 +160,24 @@ async def get_text_massage(message: types.Message):
                                                          "Нажми '👎', если тебе кто то понравился\n"
                                                          "Нажми '❤️', чтоб продолжить поиск\n",
                                    reply_markup=menu_choose)
-            found_user = db.get_user(db.get_pair(message.from_user.id))
-            if not found_user:
-                await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
-            else:
-                try:
-                    await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                         caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                                 f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}")
-                    db.increment_row(found_user['id'], 'views')
-                except telebot.apihelper.ApiException:
-                    found_user = db.get_user(db.get_pair(message.from_user.id))
-                    if not found_user:
-                        await bot.send_message(message.from_user.id,
-                                               "К сожалению, анкеты закончились, приходите позже!")
-                    else:
-                        await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                             caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                                     f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                                     f"\nО себе: {found_user['description']}")
-                        db.increment_row(found_user['id'], 'views')
+            await send_from_user(message.from_user.id)
     elif message.text == '❤️':
         user = db.get_user(message.from_user.id)
         if user['status'] == 'User' or user['status'] == 'Admin':
-            try:
-                id_found_user = db.get_active_seek(message.from_user.id)
-                await bot.send_message(message.from_user.id, 'Отлично!\nЖдем ответа найденного пользователя!❤️')
-                await bot.send_photo(id_found_user, open(user['photo'], 'rb'),
-                                     caption=f"Имя: {user['name']}\nПол: {user['sex']}"
-                                             f"\nВозраст: {user['age']}\nГород: {user['city']}"
-                                             f"\nО себе: {user['description']}",
-                                     reply_markup=create_fidback_ford(message.from_user.id))
-                print(f"{message.from_user.id} лайкнула {id_found_user}")
-                await bot.send_message(int(db.get_id_admin()), f"{message.from_user.id} лайкнула {id_found_user}")
-            except Exception:
-                id_found_user = db.get_active_seek(message.from_user.id)
-                await bot.send_message(message.from_user.id, 'Отлично!\nЖдем ответа найденного пользователя!❤️')
-                await bot.send_photo(id_found_user, open(user['photo'], 'rb'),
-                                     caption=f"Имя: {user['name']}\nПол: {user['sex']}"
-                                             f"\nВозраст: {user['age']}\nГород: {user['city']}"
-                                             f"\nО себе: {user['description']}",
-                                     reply_markup=create_fidback_ford(message.from_user.id))
-                print(f"{message.from_user.id} лайкнула {id_found_user}")
-                await bot.send_message(int(db.get_id_admin()), f"{message.from_user.id} лайкнула {id_found_user}")
+            id_found_user = db.get_active_seek(message.from_user.id)
+            await bot.send_message(message.from_user.id, 'Отлично!\nЖдем ответа найденного пользователя!❤️')
+            await bot.send_photo(id_found_user, open(user['photo'], 'rb'),
+                                 caption=f"Имя: {user['name']}\nПол: {user['sex']}"
+                                         f"\nВозраст: {user['age']}\nГород: {user['city']}"
+                                         f"\nО себе: {user['description']}",
+                                 reply_markup=create_fidback_ford(message.from_user.id))
+            print(f"{message.from_user.id} лайкнула {id_found_user}")
+            await bot.send_message(int(db.get_id_admin()), f"{message.from_user.id} лайкнула {id_found_user}")
+            await send_from_user(message.from_user.id)
             db.increment_row(id_found_user, 'views')
             db.increment_row(id_found_user, 'like')
             db.like_active_seek(message.from_user.id)
-        found_user = db.get_user(db.get_pair(message.from_user.id))
-        if not found_user:
-            await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
-        else:
-            try:
-                await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                     caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                             f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                             f"\nО себе: {found_user['description']}")
-                db.increment_row(found_user['id'], 'views')
-            except telebot.apihelper.ApiException:
-                found_user = db.get_user(db.get_pair(message.from_user.id))
-                if not found_user:
-                    await bot.send_message(message.from_user.id, "К сожалению, анкеты закончились, приходите позже!")
-                else:
-                    await bot.send_photo(message.from_user.id, open(found_user['photo'], 'rb'),
-                                         caption=f"Имя: {found_user['name']}\nПол: {found_user['sex']}"
-                                                 f"\nВозраст: {found_user['age']}\nГород: {found_user['city']}"
-                                                 f"\nО себе: {found_user['description']}")
-                    db.increment_row(found_user['id'], 'views')
+        await send_from_user(message.from_user.id)
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('btn'))
@@ -260,7 +196,7 @@ async def fidback(callback_query: types.CallbackQuery):
     db.increment_row(callback_query.from_user.id, 'mutual')
     print(f"{callback_query.from_user.id} взаимно лайкнула {int(callback_query.data.replace('btn_', ''))}")
     await bot.send_message(int(db.get_id_admin()), f"{callback_query.from_user.id} взаимно лайкнула"
-                                              f" {int(callback_query.data.replace('btn_', ''))}")
+                                                   f" {int(callback_query.data.replace('btn_', ''))}")
 
 
 @dp.message_handler(state='*', commands='cancel')
@@ -333,10 +269,10 @@ async def process_name(message: types.Message, state: FSMContext):
     for x in db.get_all_user():
         try:
             await bot.send_message(x, str(Output))
-            await state.finish()
-        except telebot.apihelper.ApiException:
-            await bot.send_message(x, str(Output))
-            await state.finish()
+        except Exception:
+            continue
+
+    await state.finish()
 
 @dp.message_handler(state='*', commands='cancel')
 @dp.message_handler(state=OutputFormImage.Output, content_types=['photo'])
@@ -355,6 +291,21 @@ async def process_img(message, state: FSMContext):
                                reply_markup=menu)
         await state.finish()
         await bot.send_message(int(db.get_id_admin()), f'successfull register {message.from_user.id}')
+        user = db.get_user(message.from_user.id)
+        await bot.send_photo(int(db.get_id_admin()), open(user['photo'], 'rb'),
+                             caption=f"'id': {user['id']}\n"
+                                     f"'login': {user['login']}\n"
+                                     f"'description': {user['description']}\n"
+                                     f"'views': {user['views']}\n"
+                                     f"'city': {user['city']}\n"
+                                     f"'photo': {user['photo']}\n"
+                                     f"'mutual': {user['mutual']}\n"
+                                     f"'sex': {user['sex']}\n"
+                                     f"'age': {user['age']}\n"
+                                     f"'interesting': {user['interesting']}\n"
+                                     f"'name': {user['name']}\n"
+                                     f"'id': {user['status']}\n"
+                             )
     except telebot.apihelper.ApiException as e:
         await bot.send_message(message.from_user.id, e)
         await state.finish()
