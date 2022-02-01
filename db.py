@@ -2,14 +2,35 @@ from settings import *
 import json
 import random
 
+
 class DB:
 
     def __init__(self, host, database):
         self.db_client = pymongo.MongoClient(host)
         self.current_db = self.db_client[f'{database}']
         self.collection_user = self.current_db['User']
-        self.collection_admin = self.current_db['Admin']
         self.collection_seeker = self.current_db['Seeker']
+        self.collection_ADV = self.current_db['ADV']
+
+    def create_ADV(self, telegram_id, num_of_ADV):
+        request = {
+            'telegram_id': telegram_id,
+            'num_of_ADV': num_of_ADV,
+            'photo': None,
+            'text': None,
+            'status': 'setting'
+        }
+        self.collection_ADV.insert_one(request)
+        print(f"Created: {num_of_ADV}")
+
+    def get_ADV_begin_ADV(self):
+        return self.collection_ADV.find_one({'status': 'setting'})
+
+    def get_adv(self, num_of_ADV):
+        return self.collection_ADV.find_one({'num_of_ADV': num_of_ADV})
+
+    def set_value_ADV(self, row, value):
+        self.collection_ADV.update_one({'status': 'setting'}, {"$set": {f"{row}": value}})
 
     def create_new_seeker(self, telegram_id, telegram_id_found_user):
         request = {
@@ -27,7 +48,8 @@ class DB:
         self.collection_seeker.update_many({'telegram_id': telegram_id}, {"$set": {'status': 'like'}})
 
     def ok_active_seek(self, telegram_id, found_user):
-        self.collection_seeker.update_one({'telegram_id': telegram_id, 'found_user': found_user}, {"$set": {'status': 'ok'}})
+        self.collection_seeker.update_one({'telegram_id': telegram_id, 'found_user': found_user},
+                                          {"$set": {'status': 'ok'}})
 
     def get_active_seek(self, telegram_id):
         return self.collection_seeker.find_one({'telegram_id': telegram_id, 'status': 'active'})['found_user']
@@ -113,6 +135,9 @@ class DB:
 
     def get_user(self, telegram_id):
         return self.collection_user.find_one({'id': telegram_id})
+
+    def delete_user(self, telegram_id):
+        self.collection_user.delete_one({'id': telegram_id})
 
     def get_all_user(self):
         list_id_user = []
