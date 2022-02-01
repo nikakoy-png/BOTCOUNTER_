@@ -28,7 +28,23 @@ class OutputFormGetUser(StatesGroup):
     Output = State()
 
 
+class OutputFormADV(StatesGroup):
+    Output = State()
+
+
 class OutputFormMessage(StatesGroup):
+    Output = State()
+
+
+class OutputFormIMG_ADV(StatesGroup):
+    Output = State()
+
+
+class OutputFormText_ADV(StatesGroup):
+    Output = State()
+
+
+class OutputFormGetNumADV(StatesGroup):
     Output = State()
 
 
@@ -44,6 +60,7 @@ button7 = KeyboardButton('стоп')
 button8 = KeyboardButton('Начать подбор💜')
 button9 = KeyboardButton('Анкета❤️')
 button10 = KeyboardButton('Статистика📈')
+button11 = KeyboardButton('Редактировать анкету✏️')
 
 sex = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2, one_time_keyboard=True).add(
     button1, button2
@@ -58,7 +75,7 @@ menu_choose = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2).add(
 )
 
 menu = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2).add(
-    button8, button9, button10
+    button8, button9, button10, button11
 )
 
 bot = Bot(token=KEY_BOT)
@@ -100,10 +117,26 @@ async def get_user(message):
         await OutputFormGetUser.Output.set()
 
 
+@dp.message_handler(commands=['create_ADV'])
+async def get_user(message):
+    user = db.get_user(message.from_user.id)
+    if user['status'] == 'Admin':
+        await bot.send_message(message.from_user.id, 'Отправьте айди ADV:')
+        await OutputFormADV.Output.set()
+
+
+@dp.message_handler(commands=['send_ADV'])
+async def get_user(message):
+    user = db.get_user(message.from_user.id)
+    if user['status'] == 'Admin':
+        await bot.send_message(message.from_user.id, 'Отправьте айди ADV:')
+        await OutputFormGetNumADV.Output.set()
+
+
 async def send_from_user(id_user):
     found_user = db.get_user(db.get_pair(id_user))
     if not found_user:
-        await bot.send_message(id_user, "К сожалению, анкеты закончились, приходите позже!")
+        await bot.send_message(id_user, "К сожалению, анкеты закончились, приходите позже!", reply_markup=menu)
     else:
         try:
             await bot.send_photo(id_user, open(found_user['photo'], 'rb'),
@@ -118,22 +151,39 @@ async def send_from_user(id_user):
 @dp.message_handler(content_types=['text'])
 async def get_text_massage(message: types.Message):
     if message.text == 'Я парень':
-        db.set_value(message.from_user.id, 'sex', 'Парень')
-        await bot.send_message(message.from_user.id, "Кто тебе интересен?", reply_markup=sex_)
+        user = db.get_user(message.from_user.id)
+        if user['status'] != 'User':
+            db.set_value(message.from_user.id, 'sex', 'Парень')
+            await bot.send_message(message.from_user.id, "Кто тебе интересен?", reply_markup=sex_)
     elif message.text == 'Я девушка':
-        db.set_value(message.from_user.id, 'sex', 'Девушка')
-        await bot.send_message(message.from_user.id, "Кто тебе интересен?", reply_markup=sex_)
+        user = db.get_user(message.from_user.id)
+        if user['status'] != 'User':
+            db.set_value(message.from_user.id, 'sex', 'Девушка')
+            await bot.send_message(message.from_user.id, "Кто тебе интересен?", reply_markup=sex_)
     elif message.text == '👎':
         db.off_active_seek(message.from_user.id)
         await send_from_user(message.from_user.id)
+    elif message.text == 'Редактировать анкету✏️':
+        user = db.get_user(message.from_user.id)
+        if user['status'] == 'User':
+            db.delete_user(message.from_user.id)
+            db.register_new_user(message.from_user.id, message.from_user.username)
+            await bot.send_message(message.from_user.id, "Определимся с полом", reply_markup=sex)
     elif message.text == 'Анкета❤️':
         user = db.get_user(message.from_user.id)
         if user['status'] == 'User' or user['status'] == 'Admin':
-            await bot.send_photo(message.from_user.id, open(user['photo'], 'rb'),
-                                 caption=f"Ваша анкета:\n\nИмя: {user['name']}\nПол: {user['sex']}"
-                                         f"\nИнтересуют: {user['interesting']}\n"
-                                         f"Возраст: {user['age']}\n"
-                                         f"\nО себе: {user['description']}")
+            try:
+                await bot.send_photo(message.from_user.id, open(user['photo'], 'rb'),
+                                     caption=f"Ваша анкета:\n\nИмя: {user['name']}\nПол: {user['sex']}"
+                                             f"\nИнтересуют: {user['interesting']}\n"
+                                             f"Возраст: {user['age']}\n"
+                                             f"\nО себе: {user['description']}")
+            except Exception:
+                await bot.send_message(message.from_user.id, "Ваша анкета была удалена!\n"
+                                                             "Заполните данные еще раз, чтоб восстановить анкету.")
+                db.delete_user(message.from_user.id)
+                db.register_new_user(message.from_user.id, message.from_user.username)
+                await bot.send_message(message.from_user.id, "Определимся с полом", reply_markup=sex)
     elif message.text == 'стоп':
         user = db.get_user(message.from_user.id)
         if user['status'] == 'User' or user['status'] == 'Admin':
@@ -266,13 +316,75 @@ async def process_name(message: types.Message, state: FSMContext):
 @dp.message_handler(state=OutputFormMessage.Output)
 async def process_name(message: types.Message, state: FSMContext):
     Output = message.text
+    send_ok = 0
+    send_no = 0
     for x in db.get_all_user():
         try:
             await bot.send_message(x, str(Output))
+            send_ok += 1
         except Exception:
+            send_no += 1
             continue
-
+    await bot.send_message(message.from_user.id, f"ok: {send_ok}\n"
+                                                 f"no: {send_no}")
     await state.finish()
+
+
+@dp.message_handler(state='*', commands='cancel')
+@dp.message_handler(state=OutputFormADV.Output)
+async def process_name(message: types.Message, state: FSMContext):
+    Output = message.text
+    db.create_ADV(message.from_user.id, Output)
+    await state.finish()
+    await bot.send_message(message.from_user.id, 'Пришлите фото:')
+    await OutputFormIMG_ADV.Output.set()
+
+
+@dp.message_handler(state='*', commands='cancel')
+@dp.message_handler(state=OutputFormIMG_ADV.Output, content_types=['photo'])
+async def process_name(message: types.Message, state: FSMContext):
+    file_info = await bot.get_file(message.photo[len(message.photo) - 1].file_id)
+    downloaded_file = await bot.download_file(file_info.file_path)
+    src = filepath + f"{db.get_ADV_begin_ADV()['num_of_ADV']}.png"
+    with open(src, 'wb') as new_file:
+        new_file.write(downloaded_file.getvalue())
+    await bot.send_message(message.from_user.id, "Фото добавлено")
+    db.set_value_ADV('photo', src)
+    await state.finish()
+    await bot.send_message(message.from_user.id, 'Пришлите текст:')
+    await OutputFormText_ADV.Output.set()
+
+
+@dp.message_handler(state='*', commands='cancel')
+@dp.message_handler(state=OutputFormGetNumADV.Output)
+async def process_name(message: types.Message, state: FSMContext):
+    Output = message.text
+    send_ok = 0
+    send_no = 0
+    adv = db.get_adv(str(Output))
+    for x in db.get_all_user():
+        print('+')
+        try:
+            await bot.send_photo(x, open(adv['photo'], 'rb'), caption=f"{adv['text']}")
+            send_ok += 1
+        except Exception:
+            send_no += 1
+            continue
+    await bot.send_message(message.from_user.id, f"ok: {send_ok}\n"
+                                                 f"no: {send_no}")
+    await state.finish()
+
+
+
+@dp.message_handler(state='*', commands='cancel')
+@dp.message_handler(state=OutputFormText_ADV.Output)
+async def process_name(message: types.Message, state: FSMContext):
+    Output = message.text
+    db.set_value_ADV('text', Output)
+    db.set_value_ADV('status', 'active')
+    await state.finish()
+    await bot.send_message(message.from_user.id, 'Реклама успeшно создана')
+
 
 @dp.message_handler(state='*', commands='cancel')
 @dp.message_handler(state=OutputFormImage.Output, content_types=['photo'])
